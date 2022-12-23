@@ -1,5 +1,5 @@
 {
-    "name": "sngularai/neo4j-php-ogm",
+    "name": "jpruden92/neo4j-php-ogm",
     "description": "PHP Object Graph Mapper for Neo4j",
     "license": "Apache-2.0",
     "keywords": [
@@ -25,7 +25,7 @@
         "doctrine/annotations": "^1.2",
         "doctrine/collections": "^1.3",
         "doctrine/common": "^2.6",
-        "sngularai/neo4j-php-client": "^5.0"
+        "jpruden92/neo4j-php-client": "^5.0"
     },
     "autoload": {
         "psr-4": {

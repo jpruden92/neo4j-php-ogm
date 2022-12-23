@@ -41,7 +41,8 @@ class BasicEntityPersister
     public function load(array $criteria, array $orderBy = null)
     {
         $stmt = $this->getMatchCypher($criteria, $orderBy);
-        $result = $this->_em->getDatabaseDriver()->run($stmt->text(), $stmt->parameters());
+        $neo4j_v4fixed = preg_replace("/(\{)(\S*)}/", "\$$2", $stmt->text());
+        $result = $this->_em->getDatabaseDriver()->run($neo4j_v4fixed, $stmt->parameters());
 
         if ($result->size() > 1) {
             throw new \LogicException(sprintf('Expected only 1 record, got %d', $result->size()));
@@ -153,7 +154,7 @@ class BasicEntityPersister
         foreach ($criteria as $key => $criterion) {
             $key = (string) $key;
             $clause = $filter_cursor === 0 ? 'WHERE' : 'AND';
-            $cypher .= sprintf('%s %s.%s = {%s} ', $clause, $identifier, $key, $key);
+            $cypher .= sprintf('%s %s.%s = $%s ', $clause, $identifier, $key, $key);
             $params[$key] = $criterion;
             ++$filter_cursor;
         }
@@ -187,7 +188,9 @@ class BasicEntityPersister
     {
         $relationshipMeta = $this->_classMetadata->getRelationship($alias);
         $relAlias = $relationshipMeta->getAlias();
-        $targetAlias = $this->_em->getClassMetadataFor($relationshipMeta->getTargetEntity())->getEntityAlias();
+        $targetMetadata = $this->_em->getClassMetadataFor($relationshipMeta->getTargetEntity());
+        $targetClassLabel = $targetMetadata->getLabel();
+        $targetAlias = $targetMetadata->getEntityAlias();
         $sourceEntityId = $this->_classMetadata->getIdValue($sourceEntity);
         $relationshipType = $relationshipMeta->getType();
 
@@ -196,8 +199,8 @@ class BasicEntityPersister
 
         $relPattern = sprintf('%s-[%s:`%s`]-%s', $isIncoming, $relAlias, $relationshipType, $isOutgoing);
 
-        $cypher = 'MATCH (n) WHERE id(n) = {id} ';
-        $cypher .= 'MATCH (n)'.$relPattern.'('.$targetAlias.') ';
+        $cypher = 'MATCH (n) WHERE id(n) = $id ';
+        $cypher .= 'MATCH (n)'.$relPattern.'('.$targetAlias.($targetClassLabel != null ? ':' . $targetClassLabel : '').') ';
         $cypher .= 'RETURN '.$targetAlias;
 
         $params = ['id' => (int) $sourceEntityId];
@@ -209,7 +212,8 @@ class BasicEntityPersister
     {
         $relationshipMeta = $this->_classMetadata->getRelationship($alias);
         $relAlias = $relationshipMeta->getAlias();
-        $targetAlias = $this->_em->getClassMetadataFor($relationshipMeta->getRelationshipEntityClass())->getEntityAlias();
+        $targetMetadata = $this->_em->getClassMetadataFor($relationshipMeta->getRelationshipEntityClass());
+        $targetAlias = $targetMetadata->getEntityAlias();
         $sourceEntityId = $this->_classMetadata->getIdValue($sourceEntity);
         $relationshipType = $relationshipMeta->getType();
 
@@ -220,7 +224,7 @@ class BasicEntityPersister
 
         $relPattern = sprintf('%s-[%s:`%s`]-%s', $isIncoming, $relAlias, $relationshipType, $isOutgoing);
 
-        $cypher = 'MATCH (n) WHERE id(n) = {id} ';
+        $cypher = 'MATCH (n) WHERE id(n) = $id ';
         $cypher .= 'MATCH (n)'.$relPattern.'('.$targetAlias.') ';
         $cypher .= 'RETURN {target: '.$target.'('.$relAlias.'), re: '.$relAlias.'} AS '.$relAlias;
 
@@ -233,7 +237,9 @@ class BasicEntityPersister
     {
         $relationshipMeta = $this->_classMetadata->getRelationship($alias);
         $relAlias = $relationshipMeta->getAlias();
-        $targetAlias = $this->_em->getClassMetadataFor($relationshipMeta->getTargetEntity())->getEntityAlias();
+        $targetMetadata = $this->_em->getClassMetadataFor($relationshipMeta->getTargetEntity());
+        $targetClassLabel = $targetMetadata->getLabel();
+        $targetAlias = $targetMetadata->getEntityAlias();
         $sourceEntityId = $this->_classMetadata->getIdValue($sourceEntity);
         $relationshipType = $relationshipMeta->getType();
 
@@ -242,8 +248,8 @@ class BasicEntityPersister
 
         $relPattern = sprintf('%s-[%s:`%s`]-%s', $isIncoming, $relAlias, $relationshipType, $isOutgoing);
 
-        $cypher = 'MATCH (n) WHERE id(n) = {id} ';
-        $cypher .= 'MATCH (n)'.$relPattern.'('.$targetAlias.') ';
+        $cypher = 'MATCH (n) WHERE id(n) = $id ';
+        $cypher .= 'MATCH (n)'.$relPattern.'('.$targetAlias.($targetClassLabel != null ? ':' . $targetClassLabel : '').') ';
         $cypher .= 'RETURN '.$targetAlias.' AS '.$targetAlias.' ';
 
         if ($relationshipMeta->hasOrderBy()) {
@@ -258,7 +264,8 @@ class BasicEntityPersister
     private function getMatchOneByIdCypher($id)
     {
         $identifier = $this->_classMetadata->getEntityAlias();
-        $cypher = 'MATCH ('.$identifier.') WHERE id('.$identifier.') = {id} RETURN '.$identifier;
+        $label = $this->_classMetadata->getLabel();
+        $cypher = 'MATCH ('.$identifier.':`'.$label.'`) WHERE id('.$identifier.') = $id RETURN '.$identifier;
         $params = ['id' => (int) $id];
 
         return Statement::create($cypher, $params);
@@ -268,6 +275,13 @@ class BasicEntityPersister
     {
         $relationshipMeta = $this->_classMetadata->getRelationship($alias);
         $relAlias = $relationshipMeta->getAlias();
+        $targetClassLabel = '';
+        if ($relationshipMeta->isRelationshipEntity() === false && $relationshipMeta->isTargetEntity() === true) {
+            $targetMetadata = $this->_em->getClassMetadataFor($relationshipMeta->getTargetEntity());
+            if ($targetMetadata->getLabel() != null) {
+                $targetClassLabel = ':'.$targetMetadata->getLabel();
+            }
+        }
         $sourceEntityId = $this->_classMetadata->getIdValue($sourceEntity);
         $relationshipType = $relationshipMeta->getType();
 
@@ -276,8 +290,8 @@ class BasicEntityPersister
 
         $relPattern = sprintf('%s-[:`%s`]-%s', $isIncoming, $relationshipType, $isOutgoing);
 
-        $cypher  = 'MATCH (n) WHERE id(n) = {id} ';
-        $cypher .= 'RETURN size((n)'.$relPattern.'()) ';
+        $cypher  = 'MATCH (n) WHERE id(n) = $id ';
+        $cypher .= 'RETURN size((n)'.$relPattern.'('.$targetClassLabel.')) ';
         $cypher .= 'AS '.$alias;
 
         return Statement::create($cypher, ['id' => $sourceEntityId]);

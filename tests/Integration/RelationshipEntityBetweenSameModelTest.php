@@ -53,6 +53,12 @@ class RelationshipEntityBetweenSameModelTest extends IntegrationTestCase
         $this->em->flush();
         $this->em->clear();
 
+        // at this point user 'me' follows 'followee1' - 'followee5'
+        // that means there are 5 relations:
+        //   me -> followee1
+        //   ...
+        //   me -> followee5
+
         /** @var SystemUser $u */
         $u = $this->em->getRepository(SystemUser::class)->findOneBy(['login' => 'me']);
         $this->assertEquals('me', $u->getLogin());
@@ -60,7 +66,76 @@ class RelationshipEntityBetweenSameModelTest extends IntegrationTestCase
         $h1 = spl_object_hash($u->getFollowing());
         $this->assertInstanceOf(Follow::class, $u->getFollowing()[0]);
         $this->assertEquals($h1, spl_object_hash($u->getFollowing()));
-        $this->assertEquals(5, $u->getFollowing()->count());
+        $this->assertEquals(5, $count = $u->getFollowing()->count());
+
+        for($i = 0; $i < $count; ++$i) {
+            /** @var Follow $f */
+            $f = $u->getFollowing()[$i];
+            $this->assertInstanceOf(Follow::class, $f);
+            $follower = $f->getFollower();
+            $followee = $f->getFollowee();
+
+            // make sure entities are assigned correctly
+            $this->assertEquals('me', $follower->getLogin(), '"me" is following "followeeX", not the other way round.');
+            $this->assertStringStartsWith('followee', $followee->getLogin(), '"followeeX" is followed by "me", not the other way round.');
+            $this->assertEquals(1, $followee->getFollowers()->count(), '"followeeX" should have one follower, which is "me".');
+        }
+
+        /** @var SystemUser $followee1 */
+        $followee1 = $this->em->getRepository(SystemUser::class)->findOneBy(['login' => 'followee1']);
+        $this->assertEquals(1, $followee1->getFollowers()->count());
+        $this->assertEquals('me', $followee1->getFollowers()[0]->getFollower()->getLogin());
+    }
+
+    /**
+     * Users are related in a chain
+     */
+    public function testUserWithReCanBeRetrievedChain()
+    {
+        $chainLength = 5;
+
+        $last = $me = new SystemUser('me');
+        for ($i = 0; $i < $chainLength; ++$i) {
+            $followee = new SystemUser('followee'.$i);
+            $re = new Follow($last, $followee, time() + $i);
+            $last->getFollowing()->add($re);
+            $followee->getFollowers()->add($re);
+            $this->em->persist($last);
+            $this->em->flush();
+            $last = $followee;
+        }
+        $this->em->persist($last);
+        $this->em->flush();
+        $this->em->clear();
+
+        // at this point user 'me' follows 'followee1', 'followee1' follows 'followee2', 'followee2' follows 'followee3' ...
+
+        /** @var SystemUser $u */
+        $u = $this->em->getRepository(SystemUser::class)->findOneBy(['login' => 'me']);
+        $this->assertEquals('me', $u->getLogin());
+        $this->assertInstanceOf(LazyCollection::class, $u->getFollowing());
+        $h1 = spl_object_hash($u->getFollowing());
+        $this->assertInstanceOf(Follow::class, $u->getFollowing()[0]);
+        $this->assertEquals($h1, spl_object_hash($u->getFollowing()));
+        $this->assertEquals(1, $u->getFollowing()->count());
+
+        for($i = 0; $i < $chainLength; ++$i) {
+            $messageItems = [];
+            foreach($u->getFollowing() as $item) {
+                $messageItems[] = $item->getFollower()->getLogin() . ' --follows--> '
+                                . $item->getFollowee()->getLogin();
+            }
+            $message = "{$u->getLogin()} should follow exactly one user, but the relation contains:\n" . implode("\n", $messageItems);
+
+            $this->assertEquals(1, $u->getFollowing()->count(), $message);
+            /** @var Follow $f */
+            $f = $u->getFollowing()->last();
+            $this->assertInstanceOf(Follow::class, $f);
+            $this->assertEquals(1, $f->getFollowee()->getFollowers()->count(), "{$u->getLogin()} should be followed by exactly one user.");
+
+            $u = $f->getFollowee();
+
+        }
     }
 
 }

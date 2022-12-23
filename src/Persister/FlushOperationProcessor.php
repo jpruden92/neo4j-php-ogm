@@ -44,7 +44,7 @@ class FlushOperationProcessor
         $statements = [];
         foreach ($byLabelsMap as $label => $entities) {
             foreach ($entities as $entity) {
-                $query = sprintf('UNWIND {nodes} as node
+                $query = sprintf('UNWIND $nodes as node
                 CREATE (n:`%s`) SET n += node.props', $label);
                 $metadata = $this->em->getClassMetadataFor(get_class($entity));
                 $oid = spl_object_hash($entity);
@@ -63,12 +63,18 @@ class FlushOperationProcessor
                 $propertyValues = [];
                 foreach ($metadata->getPropertiesMetadata() as $field => $meta) {
                     $fieldId = $metadata->getClassName().$field;
+                    $fieldKey = $field;
+
+                    if ($meta->getPropertyAnnotationMetadata()->hasCustomKey()) {
+                        $fieldKey = $meta->getPropertyAnnotationMetadata()->getKey();
+                    }
+
                     if ($meta->hasConverter()) {
                         $converter = Converter::getConverter($meta->getConverterType(), $fieldId);
                         $v = $converter->toDatabaseValue($meta->getValue($entity), $meta->getConverterOptions());
-                        $propertyValues[$field] = $v;
+                        $propertyValues[$fieldKey] = $v;
                     } else {
-                        $propertyValues[$field] = $meta->getValue($entity);
+                        $propertyValues[$fieldKey] = $meta->getValue($entity);
                     }
                 }
 

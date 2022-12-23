@@ -1,5 +1,25 @@
-1.0.0-RC5 (not released yet)
+1.0.0-RC9 (2017-12-12)
 
+- ProxyManager uses locking to prevent loading partially generate proxied files (Fixes #122) ([#174](https://github.com/graphaware/neo4j-php-ogm/pull/174))
+- Fixed an issue when loading relationships of the same type on two different fields ([#168](https://github.com/graphaware/neo4j-php-ogm/pull/168))
+
+1.0.0-RC8 (2017-11-09)
+
+- Feature: added the possibility to map db property key to class fields ([#164](https://github.com/graphaware/neo4j-php-ogm/pull/164))
+
+1.0.0-RC7 (2017-11-01)
+
+- Fixed PHP7 null return types in proxy ([#153](https://github.com/graphaware/neo4j-php-ogm/pull/153))
+- Fixed directions with same class relationships ([#160](https://github.com/graphaware/neo4j-php-ogm/pull/160))
+
+1.0.0-RC6 (2017-07-13)
+
+- Fixed a bug where findOneById was not checking class label in query ([#136](https://github.com/graphaware/neo4j-php-ogm/pull/136))
+- Fixed the ability to query relationships on 2 different entities with same relationship type ([#144](https://github.com/graphaware/neo4j-php-ogm/pull/144))
+
+1.0.0-RC5 (2017-04-15)
+
+- Added support for Map and Map Collections in `createQuery` result sets ([#131](https://github.com/graphaware/neo4j-php-ogm/pull/131))
 - Feature: `Property Converter` ([#128](https://github.com/graphaware/neo4j-php-ogm/pull/128))
 - Fixed issue when m..1 will have relationship references not managed. ([#127](https://github.com/graphaware/neo4j-php-ogm/pull/127))
 

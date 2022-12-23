@@ -47,12 +47,18 @@ class EntityPersister
         $removeLabels = [];
         foreach ($this->classMetadata->getPropertiesMetadata() as $field => $meta) {
             $fieldId = $this->classMetadata->getClassName().$field;
+            $fieldKey = $field;
+
+            if ($meta->getPropertyAnnotationMetadata()->hasCustomKey()) {
+                $fieldKey = $meta->getPropertyAnnotationMetadata()->getKey();
+            }
+
             if ($meta->hasConverter()) {
                 $converter = Converter::getConverter($meta->getConverterType(), $fieldId);
                 $v = $converter->toDatabaseValue($meta->getValue($object), $meta->getConverterOptions());
-                $propertyValues[$field] = $v;
+                $propertyValues[$fieldKey] = $v;
             } else {
-                $propertyValues[$field] = $meta->getValue($object);
+                $propertyValues[$fieldKey] = $meta->getValue($object);
             }
         }
 
@@ -88,12 +94,18 @@ class EntityPersister
         $removeLabels = [];
         foreach ($this->classMetadata->getPropertiesMetadata() as $field => $meta) {
             $fieldId = $this->classMetadata->getClassName().$field;
+            $fieldKey = $field;
+
+            if ($meta->getPropertyAnnotationMetadata()->hasCustomKey()) {
+                $fieldKey = $meta->getPropertyAnnotationMetadata()->getKey();
+            }
+
             if ($meta->hasConverter()) {
                 $converter = Converter::getConverter($meta->getConverterType(), $fieldId);
                 $v = $converter->toDatabaseValue($meta->getValue($object), $meta->getConverterOptions());
-                $propertyValues[$field] = $v;
+                $propertyValues[$fieldKey] = $v;
             } else {
-                $propertyValues[$field] = $meta->getValue($object);
+                $propertyValues[$fieldKey] = $meta->getValue($object);
             }
         }
 
@@ -106,7 +118,7 @@ class EntityPersister
         }
         $id = $this->classMetadata->getIdValue($object);
 
-        $query = 'MATCH (n) WHERE id(n) = {id} SET n += {props}';
+        $query = 'MATCH (n) WHERE id(n) = $id SET n += $props';
         if (!empty($extraLabels)) {
             foreach ($extraLabels as $label) {
                 $query .= ' SET n:'.$label;
@@ -141,7 +153,7 @@ class EntityPersister
 
     public function getDetachDeleteQuery($object)
     {
-        $query = 'MATCH (n) WHERE id(n) = {id} DETACH DELETE n';
+        $query = 'MATCH (n) WHERE id(n) = $id DETACH DELETE n';
         $id = $this->classMetadata->getIdValue($object);
 
         return Statement::create($query, ['id' => $id]);
@@ -149,7 +161,7 @@ class EntityPersister
 
     public function getDeleteQuery($object)
     {
-        $query = 'MATCH (n) WHERE id(n) = {id} DELETE n';
+        $query = 'MATCH (n) WHERE id(n) = $id DELETE n';
         $id = $this->classMetadata->getIdValue($object);
 
         return Statement::create($query, ['id' => $id]);

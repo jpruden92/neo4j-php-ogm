@@ -51,28 +51,40 @@ class RelationshipEntityPersister
             'fields' => [],
         ];
 
-        foreach ($this->classMetadata->getPropertiesMetadata() as $propertyMetadata) {
+        foreach ($this->classMetadata->getPropertiesMetadata() as $field => $propertyMetadata) {
             $v = $propertyMetadata->getValue($entity);
-            $parameters['fields'][$propertyMetadata->getPropertyName()] = $v;
+            $fieldKey = $field;
+
+            if ($propertyMetadata->getPropertyAnnotationMetadata()->hasCustomKey()) {
+                $fieldKey = $propertyMetadata->getPropertyAnnotationMetadata()->getKey();
+            }
+
+            $parameters['fields'][$fieldKey] = $v;
         }
 
         foreach ($this->classMetadata->getPropertiesMetadata() as $field => $meta) {
             $fieldId = $this->classMetadata->getClassName().$field;
+            $fieldKey = $field;
+
+            if ($meta->getPropertyAnnotationMetadata()->hasCustomKey()) {
+                $fieldKey = $meta->getPropertyAnnotationMetadata()->getKey();
+            }
+
             if ($meta->hasConverter()) {
                 $converter = Converter::getConverter($meta->getConverterType(), $fieldId);
                 $v = $converter->toDatabaseValue($meta->getValue($entity), $meta->getConverterOptions());
-                $parameters['fields'][$field] = $v;
+                $parameters['fields'][$fieldKey] = $v;
             } else {
-                $parameters['fields'][$field] = $meta->getValue($entity);
+                $parameters['fields'][$fieldKey] = $meta->getValue($entity);
             }
         }
 
-        $query = 'MATCH (a), (b) WHERE id(a) = {a} AND id(b) = {b}'.PHP_EOL;
+        $query = 'MATCH (a), (b) WHERE id(a) = $a AND id(b) = $b'.PHP_EOL;
         $query .= sprintf('CREATE (a)-[r:%s]->(b)', $relType).PHP_EOL;
         if (!empty($parameters['fields'])) {
-            $query .= 'SET r += {fields} ';
+            $query .= 'SET r += $fields ';
         }
-        $query .= 'RETURN id(r) AS id, {oid} AS oid';
+        $query .= 'RETURN id(r) AS id, $oid AS oid';
         $parameters['oid'] = spl_object_hash($entity);
 
         return Statement::create($query, $parameters);
@@ -82,7 +94,7 @@ class RelationshipEntityPersister
     {
         $id = $this->classMetadata->getIdValue($entity);
 
-        $query = sprintf('MATCH ()-[rel]->() WHERE id(rel) = %d SET rel += {fields}', $id);
+        $query = sprintf('MATCH ()-[rel]->() WHERE id(rel) = %d SET rel += $fields', $id);
 
         $parameters = [
             'fields' => [],
@@ -90,12 +102,18 @@ class RelationshipEntityPersister
 
         foreach ($this->classMetadata->getPropertiesMetadata() as $field => $meta) {
             $fieldId = $this->classMetadata->getClassName().$field;
+            $fieldKey = $field;
+
+            if ($meta->getPropertyAnnotationMetadata()->hasCustomKey()) {
+                $fieldKey = $meta->getPropertyAnnotationMetadata()->getKey();
+            }
+
             if ($meta->hasConverter()) {
                 $converter = Converter::getConverter($meta->getConverterType(), $fieldId);
                 $v = $converter->toDatabaseValue($meta->getValue($entity), $meta->getConverterOptions());
-                $parameters['fields'][$field] = $v;
+                $parameters['fields'][$fieldKey] = $v;
             } else {
-                $parameters['fields'][$field] = $meta->getValue($entity);
+                $parameters['fields'][$fieldKey] = $meta->getValue($entity);
             }
         }
 
@@ -105,7 +123,7 @@ class RelationshipEntityPersister
     public function getDeleteQuery($entity)
     {
         $id = $this->classMetadata->getIdValue($entity);
-        $query = 'START rel=rel('.$id.') DELETE rel RETURN {oid} AS oid';
+        $query = 'START rel=rel('.$id.') DELETE rel RETURN $oid AS oid';
         $params = ['oid' => spl_object_hash($entity)];
 
         return Statement::create($query, $params);
